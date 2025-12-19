@@ -31,7 +31,7 @@ extern "C" {
 #endif
 
 #ifdef DVDNAV_API_EXPORT
-#  if defined(_WIN32)
+#  if defined(_WIN32) || defined(__OS2__)
 #    define DVDNAV_API  __declspec(dllexport)
 #  elif defined(__GNUC__) && __GNUC__ >= 4
 #    define DVDNAV_API  __attribute__((visibility("default")))
