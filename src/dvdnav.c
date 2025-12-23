@@ -38,7 +38,6 @@
 #include "dvdnav/dvdnav.h"
 #include <dvdread/dvd_reader.h>
 #include <dvdread/nav_types.h>
-#include <dvdread/ifo_types.h> /* For vm_cmd_t */
 #include "vm/decoder.h"
 #include "vm/vm.h"
 #include "vm/getset.h"
@@ -279,7 +278,7 @@ dvdnav_status_t dvdnav_reset(dvdnav_t *this) {
   pthread_mutex_lock(&this->vm_lock);
 
 #ifdef LOG_DEBUG
-  Log3(this, "reseting vm");
+  Log3(this, "resetting vm");
 #endif
   if(!vm_reset(this->vm, NULL, NULL, NULL)) {
     printerr("Error restarting the VM.");
@@ -310,7 +309,7 @@ const char* dvdnav_err_to_string(dvdnav_t *this) {
 }
 
 /* converts a dvd_time_t to PTS ticks */
-int64_t dvdnav_convert_time(dvd_time_t *time) {
+int64_t dvdnav_convert_time(const dvd_time_t *time) {
   int64_t result;
   int64_t frames;
 
@@ -476,7 +475,7 @@ static int32_t dvdnav_get_vobu(dvdnav_t *this, dsi_t *nav_dsi, pci_t *nav_pci, d
  * These are the main get_next_block function which actually get the media stream video and audio etc.
  *
  * There are two versions: The second one is using the zero-copy read ahead cache and therefore
- * hands out pointers targetting directly into the cache.
+ * hands out pointers targeting directly into the cache.
  * The first one uses a memcopy to fill this cache block into the application provided memory.
  * The benefit of this first one is that no special memory management is needed. The application is
  * the only one responsible of allocating and freeing the memory associated with the pointer.
@@ -808,7 +807,7 @@ dvdnav_status_t dvdnav_get_next_cache_block(dvdnav_t *this, uint8_t **buf,
     Log3(this, "SPU_STREAM_CHANGE stream_id_pan_scan=%d",stream_change->physical_pan_scan);
     Log3(this, "SPU_STREAM_CHANGE returning DVDNAV_STATUS_OK");
 #endif
-    /* This is not realy the right place to do this. FOSL_BTNN should set the register
+    /* This is not really the right place to do this. FOSL_BTNN should set the register
      * at HLI_S_PTM rather than when we enter the SPU. As well we should activate FOAC_BTNN
      * at HLI_E_PTM
      */
@@ -954,6 +953,28 @@ dvdnav_status_t dvdnav_get_title_string(dvdnav_t *this, const char **title_str) 
 dvdnav_status_t dvdnav_get_serial_string(dvdnav_t *this, const char **serial_str) {
   (*serial_str) = this->vm->dvd_serial;
   return DVDNAV_STATUS_OK;
+}
+
+char * dvdnav_get_volid_string(dvdnav_t *this) {
+  if (!this || !this->vm || !this->vm->dvd) {
+    printerr("Invalid state, vm or reader not available.");
+    return NULL;
+  }
+
+  char *volid_str = malloc(33);
+  if (volid_str == NULL) {
+    printerr("Insufficient memory available.");
+    return NULL;
+  }
+
+  if (DVDUDFVolumeInfo(this->vm->dvd, volid_str, 32, NULL, 0) == -1) {
+    if (DVDISOVolumeInfo(this->vm->dvd, volid_str, 33, NULL, 0) == -1) {
+      printerr("Failed to obtain volume id.");
+      free(volid_str);
+      return NULL;
+    }
+  }
+  return volid_str;
 }
 
 uint8_t dvdnav_get_video_aspect(dvdnav_t *this) {
@@ -1111,6 +1132,54 @@ int8_t dvdnav_get_audio_logical_stream(dvdnav_t *this, uint8_t audio_num) {
   return retval;
 }
 
+int8_t dvdnav_get_number_of_streams(dvdnav_t *this, dvdnav_stream_type_t stream_type) {
+
+  if (stream_type != DVD_SUBTITLE_STREAM && stream_type != DVD_AUDIO_STREAM) {
+    printerr("Invalid provided stream type");
+    return -1;
+  }
+
+  if (!this->started) {
+    printerr("Virtual DVD machine not started.");
+    return -1;
+  }
+
+  pthread_mutex_lock(&this->vm_lock);
+  if (!this->vm->state.pgc) {
+    printerr("No current PGC.");
+    pthread_mutex_unlock(&this->vm_lock);
+    return -1;
+  }
+
+  if (this->vm->state.domain != DVD_DOMAIN_VTSTitle &&
+      this->vm->state.domain != DVD_DOMAIN_VTSMenu)
+  {
+    printerr("Invalid domain provided");
+    pthread_mutex_unlock(&this->vm_lock);
+    return -1;
+  }
+
+  int8_t count = 0;
+  switch (stream_type) {
+  case DVD_SUBTITLE_STREAM:
+    for (int i = 0; i < 32; i++)
+    {
+      if (this->vm->state.pgc->subp_control[i] & (1<<31))
+        count++;
+    }
+    break;
+  case DVD_AUDIO_STREAM:
+    for (int i = 0; i < 8; i++)
+    {
+      if (this->vm->state.pgc->audio_control[i] & (1<<15))
+        count++;
+    }
+    break;
+  }
+  pthread_mutex_unlock(&this->vm_lock);
+  return count;
+}
+
 dvdnav_status_t dvdnav_get_audio_attr(dvdnav_t *this, uint8_t audio_num, audio_attr_t *audio_attr) {
   if(!this->started) {
     printerr("Virtual DVD machine not started.");
@@ -1204,6 +1273,80 @@ int8_t dvdnav_get_active_spu_stream(dvdnav_t *this) {
   return retval;
 }
 
+dvdnav_status_t dvdnav_set_active_stream(dvdnav_t *this, uint8_t stream_num, dvdnav_stream_type_t stream_type) {
+   if (stream_type != DVD_SUBTITLE_STREAM && stream_type != DVD_AUDIO_STREAM) {
+    printerr("Invalid provided stream type");
+    return DVDNAV_STATUS_ERR;
+  }
+
+  if (!this->started) {
+    printerr("Virtual DVD machine not started.");
+    return DVDNAV_STATUS_ERR;
+  }
+
+  pthread_mutex_lock(&this->vm_lock);
+  if (!this->vm->state.pgc) {
+    printerr("No current PGC.");
+    pthread_mutex_unlock(&this->vm_lock);
+    return DVDNAV_STATUS_ERR;
+  }
+
+  if (this->vm->state.domain != DVD_DOMAIN_VTSTitle &&
+      this->vm->state.domain != DVD_DOMAIN_VTSMenu)
+  {
+    printerr("Invalid active domain");
+    pthread_mutex_unlock(&this->vm_lock);
+    return DVDNAV_STATUS_ERR;
+  }
+
+  switch (stream_type) {
+  case DVD_SUBTITLE_STREAM:
+    if (stream_num >= 32 ||
+        !(this->vm->state.pgc->subp_control[stream_num] & (1 << 31))) {
+      printerr("Invalid stream index not allowed");
+      pthread_mutex_unlock(&this->vm_lock);
+      return DVDNAV_STATUS_ERR;
+    }
+    // set state without changing the current visibility
+    this->vm->state.SPST_REG = stream_num | (this->vm->state.SPST_REG & 0x40);
+    break;
+  case DVD_AUDIO_STREAM:
+    if (stream_num >= 8 ||
+        !(this->vm->state.pgc->audio_control[stream_num] & (1 << 15))) {
+      printerr("Invalid stream index not allowed");
+      pthread_mutex_unlock(&this->vm_lock);
+      return DVDNAV_STATUS_ERR;
+    }
+    this->vm->state.AST_REG = stream_num;
+    break;
+  }
+  pthread_mutex_unlock(&this->vm_lock);
+  return DVDNAV_STATUS_OK;
+}
+
+dvdnav_status_t dvdnav_toggle_spu_stream(dvdnav_t *this, uint8_t visibility) {
+  if(!this->started) {
+    printerr("Virtual DVD machine not started.");
+    return DVDNAV_STATUS_ERR;
+  }
+
+  pthread_mutex_lock(&this->vm_lock);
+  switch(visibility) {
+  case 0: /* disable */
+    this->vm->state.SPST_REG &= ~0x40;
+    break;
+  case 1:  /* enable */
+    this->vm->state.SPST_REG |= 0x40;
+    break;
+  default:
+    printerr("Invalid provided enabled_flag value");
+    pthread_mutex_unlock(&this->vm_lock);
+    return DVDNAV_STATUS_ERR;
+  }
+  pthread_mutex_unlock(&this->vm_lock);
+  return DVDNAV_STATUS_OK;
+}
+
 static int8_t dvdnav_is_domain(dvdnav_t *this, DVDDomain_t domain) {
   int8_t        retval;
 
@@ -1264,6 +1407,19 @@ dvdnav_status_t dvdnav_get_angle_info(dvdnav_t *this, int32_t *current_angle,
   return DVDNAV_STATUS_OK;
 }
 
+dvdnav_status_t dvdnav_get_disk_region_mask(dvdnav_t *this, int32_t *region_mask) {
+  pthread_mutex_lock(&this->vm_lock);
+  if (!this->vm || !this->vm->vmgi || !this->vm->vmgi->vmgi_mat) {
+    printerr("Bad VM state.");
+    pthread_mutex_unlock(&this->vm_lock);
+    return DVDNAV_STATUS_ERR;
+  }
+
+  (*region_mask) = ((this->vm->vmgi->vmgi_mat->vmg_category >> 16) & 0xff) ^ 0xff;
+  pthread_mutex_unlock(&this->vm_lock);
+  return DVDNAV_STATUS_OK;
+}
+
 pci_t* dvdnav_get_current_nav_pci(dvdnav_t *this) {
   if(!this) return 0;
   return &this->pci;
@@ -1292,7 +1448,7 @@ user_ops_t dvdnav_get_restrictions(dvdnav_t* this) {
 
   ops.ops_int = 0;
 
-  if(!this->started) {
+  if(!this || !this->started) {
     printerr("Virtual DVD machine not started.");
     return ops.ops_struct;
   }

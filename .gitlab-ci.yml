@@ -1,0 +1,85 @@
+stages:
+    - build
+
+variables:
+    GIT_SUBMODULE_STRATEGY: normal
+
+build-debian:
+    image: registry.videolan.org/dav1d-debian-unstable:20250207200301
+    stage: build
+    tags:
+        - docker
+        - amd64
+    script:
+        - git clone --branch master --depth 1 https://code.videolan.org/videolan/libdvdread.git subprojects/libdvdread
+        - meson setup build
+        - meson compile -C build
+
+build-raspberry:
+    image: registry.videolan.org/vlc-ubuntu-raspberry:20240806085528
+    stage: build
+    tags:
+        - docker
+        - amd64
+    script:
+        - MESON_VERSION=1.8.4
+        - MESON_URL=https://github.com/mesonbuild/meson/releases/download/${MESON_VERSION}/meson-${MESON_VERSION}.tar.gz
+        - MESON_SHASUM512=3325c3968649847621e4d39309222741e5158b204ff6cc88410f364634c9978b5fb4c02c73968b3b7df46c89371a5b27aec9a997917dae757415bd77f5db39f2
+        - curl -LsO "${MESON_URL}" && echo $MESON_SHASUM512 meson-${MESON_VERSION}.tar.gz | sha512sum -c - && tar xvzf meson-${MESON_VERSION}.tar.gz
+
+        - git clone --branch master --depth 1 https://code.videolan.org/videolan/libdvdread.git subprojects/libdvdread
+        - meson-${MESON_VERSION}/meson.py setup build --cross-file package/crossfiles/arm-linux-gnueabihf.meson
+        - meson-${MESON_VERSION}/meson.py compile -C build
+
+build-macos:
+    stage: build
+    tags:
+        - amd64
+        - macos
+    script:
+        - git clone --branch master --depth 1 https://code.videolan.org/videolan/libdvdread.git subprojects/libdvdread
+        - meson setup build
+        - meson compile -C build
+
+build-win:
+    image: registry.videolan.org/dav1d-debian-unstable:20250207200301
+    stage: build
+    tags:
+        - docker
+        - amd64
+    script:
+        - git clone --branch master --depth 1 https://code.videolan.org/videolan/libdvdread.git subprojects/libdvdread
+        - meson setup build --cross-file package/crossfiles/${CROSSFILE}.meson
+        - meson compile -C build
+    parallel:
+        matrix:
+            - CROSSFILE: [i686-w64-mingw32, x86_64-w64-mingw32]
+
+
+build-win-arm:
+    image: registry.videolan.org/vlc-debian-llvm-msvcrt:20250305204125
+    stage: build
+    tags:
+        - docker
+        - amd64
+    script:
+        - git clone --branch master --depth 1 https://code.videolan.org/videolan/libdvdread.git subprojects/libdvdread
+        - meson setup build --cross-file package/crossfiles/${CROSSFILE}.meson
+        - meson compile -C build
+    parallel:
+        matrix:
+            - CROSSFILE: [armv7-w64-mingw32, aarch64-w64-mingw32]
+
+build-wasm:
+    image: registry.videolan.org/vlc-debian-wasm-emscripten:20250905104736
+    stage: build
+    tags:
+        - docker
+        - amd64
+    script:
+        - git clone --branch master --depth 1 https://code.videolan.org/videolan/libdvdread.git subprojects/libdvdread
+        - source $EMSCRIPTEN_SDK/emsdk_env.sh
+        - export EM_CACHE=`em-config CACHE`
+        - meson setup build --cross-file package/crossfiles/wasm-unknown-emscripten.meson
+        - meson compile -C build
+

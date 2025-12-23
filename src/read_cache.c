@@ -28,6 +28,7 @@
 #include "config.h"
 #endif
 
+#include <assert.h>
 #include <inttypes.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -35,7 +36,6 @@
 #include <time.h>
 #include "dvdnav/dvdnav.h"
 #include <dvdread/nav_types.h>
-#include <dvdread/ifo_types.h>
 #include "vm/decoder.h"
 #include "vm/vm.h"
 #include "dvdnav_internal.h"
@@ -336,6 +336,7 @@ dvdnav_status_t dvdnav_free_cache_block(dvdnav_t *self, unsigned char *buf) {
   for (i = 0; i < READ_CACHE_CHUNKS; i++) {
     if (cache->chunk[i].cache_buffer && buf >= cache->chunk[i].cache_buffer &&
         buf < cache->chunk[i].cache_buffer + cache->chunk[i].cache_malloc_size * DVD_VIDEO_LB_LEN) {
+      assert(cache->chunk[i].usage_count > 0);
       cache->chunk[i].usage_count--;
     }
   }

@@ -30,7 +30,6 @@
 #include <stdio.h>
 
 #include <dvdread/nav_types.h>
-#include <dvdread/ifo_types.h>
 #include <dvdread/ifo_read.h>
 #include "dvdnav/dvdnav.h"
 
@@ -178,7 +177,11 @@ link_t play_PG(vm_t *vm) {
     Log3(vm, "play_PG: (vm->state).pgN (%i) > pgc->nr_of_programs (%i)",
             (vm->state).pgN, (vm->state).pgc->nr_of_programs );
 #endif
-    assert((vm->state).pgN == (vm->state).pgc->nr_of_programs + 1);
+    if((vm->state).pgN > (vm->state).pgc->nr_of_programs + 1) {
+      /* bogus link, ignore it */
+      link_t link_values = { LinkNoLink, 0, 0, 0 };
+      return link_values;
+    }
     return play_PGC_post(vm);
   }
 
@@ -200,7 +203,11 @@ link_t play_Cell(vm_t *vm) {
     Log3(vm, "(vm->state).cellN (%i) > pgc->nr_of_cells (%i)",
             (vm->state).cellN, (vm->state).pgc->nr_of_cells );
 #endif
-    assert((vm->state).cellN == (vm->state).pgc->nr_of_cells + 1);
+    if((vm->state).cellN > (vm->state).pgc->nr_of_cells + 1) {
+      /* bogus link, ignore it */
+      link_t link_values = { LinkNoLink, 0, 0, 0 };
+      return link_values;
+    }
     return play_PGC_post(vm);
   }
 
@@ -261,7 +268,7 @@ link_t play_Cell(vm_t *vm) {
 }
 
 link_t play_Cell_post(vm_t *vm) {
-  cell_playback_t *cell;
+  const cell_playback_t *cell;
 
 #ifdef TRACE
   Log3(vm, "play_Cell_post: (vm->state).cellN (%i)", (vm->state).cellN);

@@ -19,7 +19,7 @@
 #ifndef LIBDVDNAV_LOGGER_H
 #define LIBDVDNAV_LOGGER_H
 
-void dvdnav_log( void *priv, const dvdnav_logger_cb *logcb,
+DVDNAV_API void dvdnav_log( void *priv, const dvdnav_logger_cb *logcb,
                  dvdnav_logger_level_t level, const char *fmt, ... );
 
 #define LOG(ctx, level, ...) \

@@ -39,7 +39,6 @@
 #include <ctype.h>
 
 #include <dvdread/nav_types.h>
-#include <dvdread/ifo_types.h>
 #include <dvdread/ifo_read.h>
 #include "dvdnav/dvdnav.h"
 
@@ -257,7 +256,7 @@ fail:
 
 int ifoOpenNewVTSI(vm_t *vm, dvd_reader_t *dvd, int vtsN) {
   if(vm->state.vtsN == vtsN) {
-    return 1; /*  We alread have it */
+    return 1; /*  We already have it */
   }
 
   if(vm->vtsi != NULL)
@@ -376,7 +375,7 @@ int vm_reset(vm_t *vm, const char *dvdroot,
   memset(vm->state.registers.GPRM_mode, 0, sizeof(vm->state.registers.GPRM_mode));
   memset(vm->state.registers.GPRM_mode, 0, sizeof(vm->state.registers.GPRM_mode));
   memset(vm->state.registers.GPRM_time, 0, sizeof(vm->state.registers.GPRM_time));
-  vm->state.registers.SPRM[0]  = ('e'<<8)|'n'; /* Player Menu Languange code */
+  vm->state.registers.SPRM[0]  = ('e'<<8)|'n'; /* Player Menu Language code */
   vm->state.AST_REG            = 15;           /* 15 why? */
   vm->state.SPST_REG           = 62;           /* 62 why? */
   vm->state.AGL_REG            = 1;
@@ -630,7 +629,7 @@ int vm_jump_title_program(vm_t *vm, int title, int pgcn, int pgn) {
   /* process_command(vm, play_PGC_PG(vm, vm->state.pgN)); */
   link = play_PGC_PG(vm, vm->state.pgN);
   if (link.command != PlayThis)
-    /* jump occured -> ignore it and play the PG anyway */
+    /* jump occurred -> ignore it and play the PG anyway */
     process_command(vm, play_PG(vm));
   else
     process_command(vm, link);
@@ -648,7 +647,7 @@ int vm_jump_title_part(vm_t *vm, int title, int part) {
   /* process_command(vm, play_PGC_PG(vm, vm->state.pgN)); */
   link = play_PGC_PG(vm, vm->state.pgN);
   if (link.command != PlayThis)
-    /* jump occured -> ignore it and play the PG anyway */
+    /* jump occurred -> ignore it and play the PG anyway */
     process_command(vm, play_PG(vm));
   else
     process_command(vm, link);
@@ -741,13 +740,13 @@ int vm_jump_resume(vm_t *vm) {
   return !!process_command(vm, link_values);
 }
 
-int vm_exec_cmd(vm_t *vm, vm_cmd_t *cmd) {
+int vm_exec_cmd(vm_t *vm, const vm_cmd_t *cmd) {
   link_t link_values;
 
   if(vmEval_CMD(cmd, 1, &vm->state.registers, &link_values))
     return process_command(vm, link_values);
   else
-    return 0; /*  It updated some state thats all... */
+    return 0; /*  It updated some state that's all... */
 }
 
 /* link processing */

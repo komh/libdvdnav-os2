@@ -33,7 +33,6 @@
 #include <assert.h>
 
 #include <dvdread/nav_types.h>
-#include <dvdread/ifo_types.h> /* vm_cmd_t */
 
 #include "dvdnav/dvdnav.h"
 #include "decoder.h"
@@ -504,7 +503,7 @@ static int32_t eval_jump_instruction(command_t* command, int32_t cond, link_t *r
   return 0;
 }
 
-/* Evaluate a set sytem register instruction
+/* Evaluate a set system register instruction
    May contain a link so return the same as eval_link */
 static int32_t eval_system_set(command_t* command, int32_t cond, link_t *return_values) {
   int32_t i;
@@ -643,7 +642,7 @@ static void eval_set_version_2(command_t* command, int32_t cond) {
 /* Evaluate a command
    returns row number of goto, 0 if no goto, -1 if link.
    Link command in return_values */
-static int32_t eval_command(uint8_t *bytes, registers_t* registers, link_t *return_values) {
+static int32_t eval_command(const uint8_t *bytes, registers_t* registers, link_t *return_values) {
   int32_t cond, res = 0;
   command_t command;
   command.instruction =( (uint64_t) bytes[0] << 56 ) |
@@ -708,7 +707,7 @@ static int32_t eval_command(uint8_t *bytes, registers_t* registers, link_t *retu
       if(res)
         res = -1;
       break;
-    case 6: /*  Compare -> Set, allways Link Sub-Instruction */
+    case 6: /*  Compare -> Set, always Link Sub-Instruction */
       /* FIXME: These are wrong. Need to be updated from vmcmd.c */
       cond = eval_if_version_4(&command);
       eval_set_version_2(&command, cond);
@@ -731,7 +730,7 @@ static int32_t eval_command(uint8_t *bytes, registers_t* registers, link_t *retu
 }
 
 /* Evaluate a set of commands in the given register set (which is modified) */
-int32_t vmEval_CMD(vm_cmd_t commands[], int32_t num_commands,
+int32_t vmEval_CMD(const vm_cmd_t commands[], int32_t num_commands,
                registers_t *registers, link_t *return_values) {
   int32_t i = 0;
   int32_t total = 0;
